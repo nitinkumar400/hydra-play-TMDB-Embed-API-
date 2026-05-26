@@ -75,14 +75,43 @@ async function prefetchSegment(url, headers) {
 
 const DEFAULT_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
+function isHlsPlaylistUrl(url) {
+    const lowercase = url.toLowerCase();
+    if (lowercase.includes('.m3u8')) return true;
+    try {
+        const decoded = decodeURIComponent(url);
+        if (decoded.toLowerCase().includes('.m3u8')) return true;
+    } catch {}
+    
+    // Detect base64-obfuscated playlists (like VidZee)
+    const matches = url.match(/[A-Za-z0-9+/=]{16,}/g) || [];
+    for (const segment of matches) {
+        try {
+            const decoded = Buffer.from(segment, 'base64').toString('utf8');
+            if (decoded.toLowerCase().includes('.m3u8')) {
+                return true;
+            }
+        } catch {}
+    }
+    return false;
+}
+
+function isSegmentUrl(url) {
+    return /\.(ts|mp4|m4s|m4v|mkv|aac|mp3|webvtt|vtt)(\?|$)/i.test(url);
+}
+
 function inferContentType(upstreamCT, targetUrl) {
-    const bad = !upstreamCT || /application\/octet-stream/i.test(upstreamCT) || /application\/(x-)?zip/i.test(upstreamCT);
+    const lowercaseCT = String(upstreamCT || '').toLowerCase();
+    const isImageOrHtmlMask = lowercaseCT.includes('image/') || lowercaseCT.includes('text/html') || lowercaseCT.includes('text/plain');
+    const bad = !upstreamCT || /application\/octet-stream/i.test(upstreamCT) || /application\/(x-)?zip/i.test(upstreamCT) || isImageOrHtmlMask;
     if (!bad) return upstreamCT;
-    if (/\.mkv(\?|$)/i.test(targetUrl)) return 'video/x-matroska';
-    if (/\.mp4(\?|$)/i.test(targetUrl)) return 'video/mp4';
-    if (/\.m3u8(\?|$)/i.test(targetUrl)) return 'application/vnd.apple.mpegurl';
-    if (/\.ts(\?|$)/i.test(targetUrl)) return 'video/mp2t';
-    return 'application/octet-stream';
+    
+    const lowercaseUrl = targetUrl.toLowerCase();
+    if (lowercaseUrl.includes('.m3u8')) return 'application/vnd.apple.mpegurl';
+    if (lowercaseUrl.includes('.mp4') || lowercaseUrl.includes('.m4s') || lowercaseUrl.includes('.m4v')) return 'video/mp4';
+    if (lowercaseUrl.includes('.mkv')) return 'video/x-matroska';
+    if (lowercaseUrl.includes('.ts')) return 'video/mp2t';
+    return 'video/mp2t'; // Default to TS for streaming safety
 }
 
 function extractOriginalUrl(proxyUrl) {
@@ -115,6 +144,10 @@ function extractOriginalUrl(proxyUrl) {
 function rewriteM3u8(content, targetUrl, baseProxyUrl, headers) {
     const lines = content.split('\n');
     const out = []; const segmentUrls = [];
+    
+    // Detect whether this is a media playlist containing segments or a master variant playlist
+    const isSubPlaylist = content.includes('#EXTINF') || content.includes('#EXT-X-TARGETDURATION') || content.includes('#EXT-X-MEDIA-SEQUENCE');
+
     for (const line of lines) {
         if (line.startsWith('#')) {
             if (line.startsWith('#EXT-X-KEY:')) {
@@ -129,7 +162,9 @@ function rewriteM3u8(content, targetUrl, baseProxyUrl, headers) {
                 if (uriMatch) {
                     try {
                         const mediaUrl = new URL(uriMatch[1], targetUrl).href;
-                        const proxyUrl = `${baseProxyUrl}/m3u8-proxy?url=${encodeURIComponent(mediaUrl)}&headers=${encodeURIComponent(JSON.stringify(headers))}`;
+                        const isM3u8 = isHlsPlaylistUrl(mediaUrl);
+                        const endpoint = isM3u8 ? 'm3u8-proxy' : 'ts-proxy';
+                        const proxyUrl = `${baseProxyUrl}/${endpoint}?url=${encodeURIComponent(mediaUrl)}&headers=${encodeURIComponent(JSON.stringify(headers))}`;
                         out.push(line.replace(uriMatch[1], proxyUrl));
                     } catch { out.push(line); }
                 } else out.push(line);
@@ -137,12 +172,16 @@ function rewriteM3u8(content, targetUrl, baseProxyUrl, headers) {
         } else if (line.trim()) {
             try {
                 const abs = new URL(line, targetUrl).href;
-                if (/\.m3u8(\?|$)/i.test(abs)) {
+                // Semantic HLS Routing heuristic:
+                // - In a sub-playlist, all URLs are segments (ts-proxy) unless explicitly HLS.
+                // - In a master playlist, all URLs are sub-playlists (m3u8-proxy) unless explicitly segments.
+                const isM3u8 = isSubPlaylist ? isHlsPlaylistUrl(abs) : !isSegmentUrl(abs);
+                if (isM3u8) {
                     out.push(`${baseProxyUrl}/m3u8-proxy?url=${encodeURIComponent(abs)}&headers=${encodeURIComponent(JSON.stringify(headers))}`);
-                } else if (/\.ts(\?|$)/i.test(abs)) {
+                } else {
                     segmentUrls.push(abs);
                     out.push(`${baseProxyUrl}/ts-proxy?url=${encodeURIComponent(abs)}&headers=${encodeURIComponent(JSON.stringify(headers))}`);
-                } else out.push(line);
+                }
             } catch { out.push(line); }
         } else out.push(line);
     }

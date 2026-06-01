@@ -6,7 +6,7 @@
   "febboxCookies": [],
   "enable4khdhubProvider": true,
   "enableVixsrcProvider": true,
-  "enableProxy": false,
+  "enableProxy": true,
   "disableCache": false,
   "enablePStreamApi": true,
   "disableUrlValidation": false,

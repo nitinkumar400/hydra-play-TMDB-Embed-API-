@@ -110,7 +110,7 @@ function normalizeConfig(base) {
   // Default values for other flags
   if (cfg.disableCache === undefined) cfg.disableCache = false;
   if (cfg.enablePStreamApi === undefined) cfg.enablePStreamApi = true;
-  if (cfg.enableProxy === undefined) cfg.enableProxy = false; // default off
+  if (cfg.enableProxy === undefined) cfg.enableProxy = true; // default on
   // Proxy features removed; always use direct connections
   if (cfg.disableUrlValidation === undefined) cfg.disableUrlValidation = false;
   if (cfg.disable4khdhubUrlValidation === undefined) cfg.disable4khdhubUrlValidation = false;

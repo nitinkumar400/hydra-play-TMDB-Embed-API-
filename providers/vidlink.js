@@ -27,21 +27,28 @@ async function getVidlinkStreams(tmdbId, mediaType = 'movie', seasonNum = null, 
 
         const apiRes = await axios.get(apiUrl, { headers: VIDLINK_HEADERS, timeout: 8000 });
 
-        const playlist = apiRes.data && apiRes.data.stream && apiRes.data.stream.playlist;
-        if (!playlist) {
-            console.log('[Vidlink] No playlist URL in response.');
+        const qualities = apiRes.data && apiRes.data.stream && apiRes.data.stream.qualities;
+        if (!qualities || Object.keys(qualities).length === 0) {
+            console.log('[Vidlink] No qualities found in response.');
             return [];
         }
 
-        console.log(`[Vidlink] Got stream.`);
-        return [{
-            name: 'Vidlink',
-            title: 'Vidlink',
-            url: playlist,
-            quality: 'Auto',
-            provider: 'Vidlink',
-            headers: { 'Referer': 'https://vidlink.pro' }
-        }];
+        const streams = [];
+        for (const [res, streamInfo] of Object.entries(qualities)) {
+            if (streamInfo && streamInfo.url) {
+                streams.push({
+                    name: `Vidlink ${res}p`,
+                    title: `Vidlink ${res}p`,
+                    url: streamInfo.url,
+                    quality: `${res}p`,
+                    provider: 'Vidlink',
+                    headers: { 'Referer': 'https://vidlink.pro' }
+                });
+            }
+        }
+
+        console.log(`[Vidlink] Got ${streams.length} stream(s).`);
+        return streams;
     } catch (err) {
         console.error(`[Vidlink] Error: ${err.message}`);
         return [];

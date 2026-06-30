@@ -11,6 +11,7 @@ const { resolveImdbId } = require('./utils/tmdb');
 const { applyFilters } = require('./utils/streamFilters');
 
 const app = express();
+app.set('trust proxy', 1);
 
 // Conditionally mount proxy routes early so downstream handlers can use them
 if (config.enableProxy) {

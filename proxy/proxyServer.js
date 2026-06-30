@@ -124,7 +124,9 @@ function extractOriginalUrl(proxyUrl) {
                 while (decoded.includes('%2F')) {
                     try { decoded = decodeURIComponent(decoded); } catch { break; }
                 }
-                return decoded;
+                if (decoded.startsWith('http://') || decoded.startsWith('https://')) return decoded;
+                // If it's just a path (like Vidlink /proxy/wiwii/...), keep the full original URL
+                return proxyUrl;
             }
         }
         if (url.searchParams.has('url')) return decodeURIComponent(url.searchParams.get('url'));

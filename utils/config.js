@@ -173,7 +173,8 @@ function loadConfig() {
     showboxCacheDir: process.env.SHOWBOX_CACHE_DIR || null,
     // Proxy/env paths removed; always direct connections
     disableUrlValidation: process.env.DISABLE_URL_VALIDATION,
-    disable4khdhubUrlValidation: process.env.DISABLE_4KHDHUB_URL_VALIDATION
+    disable4khdhubUrlValidation: process.env.DISABLE_4KHDHUB_URL_VALIDATION,
+    enableProxy: process.env.ENABLE_PROXY
   };
   
   // Dynamic provider enable flags from env
